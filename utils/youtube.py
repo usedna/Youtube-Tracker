@@ -1,8 +1,3 @@
-# pyright: ignore[reportOptionalMemberAccess]
-# pyright: ignore[reportOptionalMemberAccess]
-# pyright: ignore[reportOptionalMemberAccess]
-# pyright: ignore[reportOptionalMemberAccess]
-
 import os
 
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -50,7 +45,6 @@ class YTStats:
                                 self.api_version, 
                                 credentials=credentials,
                                 developerKey=self.api_key)
-            
         except FileNotFoundError:
             print(f"Credential file {self.secret_file} not found")
         
@@ -59,21 +53,19 @@ class YTStats:
     
     def get_channel_info(self, channels, properties_details="snippet"):
         try:
-            request = self.client.channels().list(part=properties_details, 
-                                                  forHandle=channels,
-                                                  )
-            response = request.execute()
+            ch_request = self.client.channels().list(forHandle=channels,
+                                                     part=properties_details)
+            ch_response = ch_request.execute()
 
-            return response
+            return ch_response
 
         except Exception as err:
             print(f"Unexpected {err}, {type(err)}")
             
-    def get_channel_id():
-        pass
-            
-    def get_playlists(self, channel_id, properties_details="snippet"):
+    def get_playlists(self, channel_name, properties_details="snippet"):
         try:
+            channel_id = self.get_channel_info(channel_name, "id")["items"][0]["id"]
+            
             request = self.client.playlists().list(part=properties_details, 
                                                    channelId=channel_id,
                                                   )
@@ -98,7 +90,7 @@ class YTStats:
     def get_videos(self, videos_id, properties_details="snippet"):
         try:
             request = self.client.videos().list(part=properties_details, 
-                                                       id=videos_id)
+                                                id=videos_id)
             response = request.execute()
 
             return response
@@ -113,10 +105,11 @@ os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
 yt = YTStats(api_key="AIzaSyC7lXlxXGWqbJb0bR18I5i9uvblj--wc_U", scopes=scopes)
 yt.create_client()
-#channel_details = yt.get_channel_info("janghinaro")["items"][0]
+channel_details = yt.get_channel_info("janghinaro", properties_details="id")["items"][0]
 #playlists = yt.get_playlists(channel_details['id'])
 #playlist_items = yt.get_playlist_items("PLiFzfeyzcFOJslV-UXMJaBT739-rJwHn_")
-videos = yt.get_videos("Pk5FMb6JqhQ", "contentDetails")
-print(videos)
+#videos = yt.get_videos("Pk5FMb6JqhQ", "snippet, contentDetails")
+#print(videos)
+print(channel_details)
 
     
