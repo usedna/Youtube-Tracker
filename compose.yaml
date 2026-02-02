@@ -45,5 +45,5 @@ services:
     ports: 
       - 80:80
     environment:
-      PGADMIN_DEFAULT_EMAIL: emai@domain.com
+      PGADMIN_DEFAULT_EMAIL: email@domain.com
       PGADMIN_DEFAULT_PASSWORD: admin

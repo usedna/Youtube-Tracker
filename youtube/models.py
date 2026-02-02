@@ -4,21 +4,22 @@ from django.utils import timezone
 
 
 class Channels(models.Model):
-    channel_id = models.CharField(max_length=50, 
+    channel_id = models.CharField(max_length=30, 
                                   primary_key=True)
-    channel_name = models.CharField(max_length=200,
+    channel_name = models.CharField(max_length=50,
                                     unique=True,
                                     null=False)
+    channel_description = models.TextField()
     created_at = models.DateField()
     updated_at = models.DateField()
 
 class Videos(models.Model):
-    video_id = models.CharField(max_length=50,
+    video_id = models.CharField(max_length=20,
                                 primary_key=True)
     channel_id = models.ForeignKey(Channels, on_delete=models.CASCADE)
-    video_title = models.CharField(max_length=50)
+    video_title = models.CharField(max_length=100)
     duration = models.TimeField()
-    uploaded_at = models.DateField()
+    uploaded_at = models.DateTimeField()
     
     def __str__(self):
         return self.video_title
@@ -27,9 +28,9 @@ class Videos(models.Model):
 class Playlists(models.Model):
     playlist_id = models.CharField(max_length=50,
                                    primary_key=True)
-    channl_id = models.ForeignKey(Channels, on_delete=models.CASCADE)
+    channel_id = models.ForeignKey(Channels, on_delete=models.CASCADE)
     playlist_title = models.CharField(max_length=200)
-    num_of_videos = models.IntegerField(default=0)
+    videos_count = models.IntegerField(default=0)
     created_at = models.DateTimeField()
     
     def __str__(self):
@@ -38,5 +39,8 @@ class Playlists(models.Model):
 class PlaylistsVideos(models.Model):
     playlist_id = models.ForeignKey(Playlists, on_delete=models.CASCADE)
     video_id = models.ForeignKey(Videos, on_delete=models.CASCADE)
+    position = models.IntegerField()
+    
+
 
 
