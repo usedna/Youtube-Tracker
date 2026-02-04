@@ -63,13 +63,12 @@ class YoutubeClient():
         except Exception as err:
             print(f"Unexpected {err=}, {type(err)=}")
             
-    def get_playlists(self, channel_id=None, channel_name=None):
+    def get_playlists(self, channel_id=None):
         try:
             if self.parser is None:
                 raise Exception("The parser is not initialized")
             
-            pl_response = self.parser.parse_playlists_info(channel_id=channel_id, 
-                                                           channel_name=channel_name)
+            pl_response = self.parser.parse_playlists_info(channel_id=channel_id)
             
             return pl_response
         except Exception as err:

@@ -5,7 +5,10 @@ class YoutubeAPIParser():
         self.youtube_api = YoutubeAPI(youtube_client)
                 
     def parse_channel_info(self, channel_name):
-        try:            
+        try:
+            if channel_name is None:
+                raise Exception("Channel name is missing")
+                   
             api_response = self.youtube_api.get_channels(channel_name, 
                                                          properties_details="id,snippet,statistics,topicDetails,\
                                                                              contentDetails,brandingSettings,\
@@ -14,18 +17,18 @@ class YoutubeAPIParser():
             if api_response is None:
                 raise Exception("ERROR: API request failed")
             
-            if "items" not in api_response:
+            if "items" not in api_response or not len(api_response["items"]):
                 return None
             
-            channel = {item["id"] : {"etag": item["etag"],
-                                 "title": item["snippet"]["title"],
-                                 "description": item["snippet"]["description"],
-                                 "created_at": item["snippet"]["publishedAt"],
-                                 "country": item["snippet"]["country"],
-                                 "views": item["statistics"]["viewCount"],
-                                 "subscribers": item["statistics"]["subscriberCount"],
-                                 "videos": item["statistics"]["videoCount"],
-                                 "topics": item["topicDetails"]["topicCategories"]} 
+            channel = {item["id"] : {"details": {"etag": item["etag"],
+                                                 "channel_name": item["snippet"]["title"],
+                                                 "channel_description": item["snippet"]["description"],
+                                                 "created_at": item["snippet"]["publishedAt"],
+                                                 "country": item["snippet"]["country"],},
+                                     "statistics": {"views": item["statistics"]["viewCount"],
+                                                    "subscribers": item["statistics"]["subscriberCount"],
+                                                    "videos": item["statistics"]["videoCount"],},
+                                     "topics": item["topicDetails"]["topicCategories"]} 
                    for item in api_response["items"]}
 
             return channel
@@ -34,37 +37,33 @@ class YoutubeAPIParser():
             print(f"ERROR: Unexpected {err}, {type(err)}")
             return None
     
-    def parse_playlists_info(self, channel_id=None, channel_name=None):
+    def parse_playlists_info(self, channel_id=None):
         playlists = {}
         
         try:
             if channel_id is None:
-                if channel_name is None:
-                    raise Exception("Both channel_id and channel_name are missing")
-                
-                channel = self.parse_channel_info(channel_name)
-                
-                # TODO: Handle multiple channels returned
-                channel_id = list(channel.keys())[0]
+                raise Exception("Channel ID is missing")
             
             api_response = self.youtube_api.get_playlists(channel_id=channel_id,
-                                                         properties_details="id,snippet,contentDetails,localizations,player,status",
-                                                         max_results=1)
+                                                          properties_details="id,snippet,contentDetails,localizations,player,status",
+                                                          max_results=25)
             
-            playlists["playlists"] = {item["id"]: {"etag": item["etag"],
-                                                   "channelId": item["snippet"]["channelId"],
-                                                   "title": item["snippet"]["title"],
-                                                   "description": item["snippet"]["description"],
-                                                   "created_at": item["snippet"]["publishedAt"],
-                                                   "item_count": item["contentDetails"]["itemCount"],
+            if api_response is None:
+                raise Exception("ERROR: API request failed")
+            
+            if "items" not in api_response or not len(api_response["items"]):
+                return None
+            
+            playlists["playlists"] = {item["id"]: {"details": {"playlist_title": item["snippet"]["title"],
+                                                               "description": item["snippet"]["description"],
+                                                               "videos_count": item["contentDetails"]["itemCount"],
+                                                               "created_at": item["snippet"]["publishedAt"],
+                                                               },
                                                    "status": item["status"],
-                                                    }
+                                                   }
                                       for item in api_response["items"]}
             
             playlists.update({"playlists_count": api_response["pageInfo"]["totalResults"]})
-            
-            if channel_name is not None:
-                playlists.update({"channels_data": channel})
             
             return playlists
         
@@ -77,18 +76,19 @@ class YoutubeAPIParser():
                                                                properties_details="id,snippet,contentDetails,status",
                                                                max_results=1)
             
-            items = {item["id"]: {"videoId": item["snippet"]["resourceId"]["videoId"],
-                                  "channelId": item["snippet"]["channelId"],
-                                  "playlistId": item["snippet"]["playlistId"],
+            items = {item["id"]: {"video_id": item["snippet"]["resourceId"]["videoId"],
+                                  "channel_id": item["snippet"]["channelId"],
                                   "video_title": item["snippet"]["title"],
                                   "description": item["snippet"]["description"],
                                   "position": item["snippet"]["position"],
                                   "published_at": item["snippet"]["publishedAt"],
-                                  "video_published_at": item["contentDetails"]["videoPublishedAt"]
+                                  "created_at": item["contentDetails"]["videoPublishedAt"]
                                  }
                      for item in api_response["items"]}
             
-            return items
+            items.update({"items_count": api_response["pageInfo"]["totalResults"]})
+
+            return api_response
         
         except Exception as err:
             print(f"ERROR: Unexpected {err}, {type(err)}")
@@ -112,7 +112,7 @@ class YoutubeAPIParser():
                                    "default_language": item["snippet"]["defaultLanguage"],
                                    "tags": item["snippet"]["tags"],
                                    "paid": item["paidProductPlacementDetails"]["hasPaidProductPlacement"],
-                                   "published_at": item["snippet"]["publishedAt"],
+                                   "created_at": item["snippet"]["publishedAt"],
                                    "views": item["statistics"]["viewCount"],
                                    "likes": item["statistics"]["likeCount"],
                                    "comments": item["statistics"]["commentCount"],
