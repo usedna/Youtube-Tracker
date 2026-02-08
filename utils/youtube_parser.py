@@ -1,4 +1,5 @@
 from utils.youtube_data import YoutubeAPI
+import isodate
 
 class YoutubeAPIParser():
     def __init__(self, youtube_client):
@@ -28,7 +29,11 @@ class YoutubeAPIParser():
                                      "statistics": {"views": item["statistics"]["viewCount"],
                                                     "subscribers": item["statistics"]["subscriberCount"],
                                                     "videos": item["statistics"]["videoCount"],},
-                                     "topics": item["topicDetails"]["topicCategories"]} 
+                                     "topics": {"topic_ids": item["topicDetails"]["topicIds"],
+                                                "topic_categories": item["topicDetails"]["topicCategories"]},
+                                     "thumbnails": item["snippet"]["thumbnails"],
+                                     "banner_image": item["brandingSettings"]["image"],
+                                     "keywords": item["brandingSettings"]["channel"]["keywords"]} 
                    for item in api_response["items"]}
 
             return channel
@@ -65,7 +70,7 @@ class YoutubeAPIParser():
             
             playlists.update({"playlists_count": api_response["pageInfo"]["totalResults"]})
             
-            return playlists
+            return api_response
         
         except Exception as err:
             print(f"ERROR: Unexpected {err}, {type(err)}")
@@ -74,25 +79,26 @@ class YoutubeAPIParser():
         try:
             api_response = self.youtube_api.get_playlist_items(playlist_id, 
                                                                properties_details="id,snippet,contentDetails,status",
-                                                               max_results=1)
+                                                               max_results=25)
             
-            items = {item["id"]: {"video_id": item["snippet"]["resourceId"]["videoId"],
-                                  "channel_id": item["snippet"]["channelId"],
-                                  "video_title": item["snippet"]["title"],
-                                  "description": item["snippet"]["description"],
-                                  "position": item["snippet"]["position"],
-                                  "published_at": item["snippet"]["publishedAt"],
-                                  "created_at": item["contentDetails"]["videoPublishedAt"]
-                                 }
+            items = {item["id"]: {"video_details": {"video_id": item["snippet"]["resourceId"]["videoId"],
+                                                    "video_title": item["snippet"]["title"],
+                                                    "video_description": item["snippet"]["description"],
+                                                    "uploaded_at": item["contentDetails"]["videoPublishedAt"],},
+                                  "item":{"position": item["snippet"]["position"],
+                                          "published_at": item["snippet"]["publishedAt"],},
+                                  "thumbnails": item["snippet"]["thumbnails"]
+            }
                      for item in api_response["items"]}
             
-            items.update({"items_count": api_response["pageInfo"]["totalResults"]})
+            #items.update({"items_count": api_response["pageInfo"]["totalResults"]})
 
-            return api_response
+            return items
         
         except Exception as err:
             print(f"ERROR: Unexpected {err}, {type(err)}")
-    
+
+ 
     def parse_videos_info(self, videos_id):
         try:
             api_response = self.youtube_api.get_videos(videos_id, 
@@ -100,22 +106,22 @@ class YoutubeAPIParser():
                                                                            localizations,paidProductPlacementDetails,player,\
                                                                            recordingDetails,snippet,\
                                                                            statistics,status,topicDetails",
-                                                       max_results=1)
+                                                       max_results=25)
             
-            videos = {item["id"]: {"etag": item["etag"],
-                                   "channelId": item["snippet"]["channelId"],
-                                   "title": item["snippet"]["title"],
-                                   "description": item["snippet"]["description"],
-                                   "duration": item["contentDetails"]["duration"],
-                                   "dimension": item["contentDetails"]["dimension"],
-                                   "definition": item["contentDetails"]["definition"],
-                                   "default_language": item["snippet"]["defaultLanguage"],
-                                   "tags": item["snippet"]["tags"],
-                                   "paid": item["paidProductPlacementDetails"]["hasPaidProductPlacement"],
-                                   "created_at": item["snippet"]["publishedAt"],
-                                   "views": item["statistics"]["viewCount"],
-                                   "likes": item["statistics"]["likeCount"],
-                                   "comments": item["statistics"]["commentCount"],
+            videos = {item["id"]: {"video_details": {"etag": item["etag"],
+                                                     "video_title": item["snippet"]["title"],
+                                                     "duration": str(isodate.parse_duration(item["contentDetails"]["duration"])),
+                                                     "video_description": item["snippet"]["description"],
+                                                     "language": item["snippet"]["defaultLanguage"],
+                                                     "tags": item["snippet"]["tags"],
+                                                     "dimension": item["contentDetails"]["dimension"],
+                                                     "definition": item["contentDetails"]["definition"],
+                                                     "paid": item["paidProductPlacementDetails"]["hasPaidProductPlacement"],
+                                                     "uploaded_at": item["snippet"]["publishedAt"],},
+                                   "statistics": {"views": item["statistics"]["viewCount"],
+                                                  "likes": item["statistics"]["likeCount"],
+                                                  "comments": item["statistics"]["commentCount"],},
+                                   "channel_id": item["snippet"]["channelId"],
                                  }
                      for item in api_response["items"]}
 

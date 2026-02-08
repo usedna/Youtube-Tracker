@@ -4,14 +4,15 @@ from django.urls import reverse
 from django.views import generic
 from django.db import IntegrityError, transaction
 
-from .models import Videos, Playlists, Channels
+from .models import Videos, Playlists, Channels, PlaylistsVideos
 from utils.youtube_client import get_youtube_client
-import json
+import datetime
 
 
 client = get_youtube_client()
 
-def channels(request, channel_name):
+# TODO: Add use channel id parameter
+def channel(request, channel_name=None, channel_id=None):
     try:
         channel_details = client.get_channel_details(channel_name)
         
@@ -19,10 +20,10 @@ def channels(request, channel_name):
             raise Exception("Channel not found")
         
         with transaction.atomic():
-
             channels_db = Channels.objects.bulk_create([Channels(channel_id=channel_id, 
                                                                 **channel_details[channel_id]["details"])
-                                                      for channel_id in channel_details.keys()])
+                                                      for channel_id in channel_details.keys()],
+                                                      ignore_conflicts=True)
             
         return JsonResponse(channel_details)
     except IntegrityError:
@@ -36,10 +37,10 @@ def channels(request, channel_name):
                              "msg": "Channel not found"}, status=404)
 
 # TODO: Add channel_id parameter
-def channel_playlists(request, channel_name):
+def channel_playlists(request, channel_name=None, channel_id=None):
     try:    
         if not Channels.objects.filter(channel_name=channel_name).exists():
-            channel_details = channels(request, channel_name)
+            channel_details = channel(request, channel_name)
             
             if channel_details.status_code == 404:
                 raise Exception("Channel not found")
@@ -70,23 +71,72 @@ def channel_playlists(request, channel_name):
                              "msg": "Playlists not found"}, 
                             status=404)
 
-# TODO: Add use playlist name
+
 def playlist_videos(request, playlist_id):
     try:
-        # TODO: Implement database
+        
+        playlist_db = get_object_or_404(Playlists, playlist_id=playlist_id)
         
         playlist_items = client.get_playlist_items(playlist_id)
+
+        with transaction.atomic():
+            for item_id in playlist_items.keys():
+                video_db=Videos(channel_id=playlist_db.channel_id,
+                                duration="00:00",
+                                **playlist_items[item_id]["video_details"],
+                                )
+                video_db.save()
+                
+                playlist_videos_db = PlaylistsVideos(playlist_id=playlist_db,
+                                                     video_id=video_db,
+                                                     **playlist_items[item_id]["item"])
+                playlist_videos_db.save()
+            
         return JsonResponse(playlist_items)
+    
     except Exception as err:
+        print(err, type(err))
         return JsonResponse({"error": str(err),
                              "msg": "Playlist items not found"}, 
                             status=404)
         
-def videos(request, video_id):
+def video(request, video_id):
     try:
-        # TODO: Implement database
+        video_details = {}
         
-        video_details = client.get_videos(video_id)
+        if not Videos.objects.filter(video_id=video_id).exists():
+            video_db = None
+            duration = 0
+        else:
+            video_db = Videos.objects.get(video_id=video_id)
+            duration = datetime.timedelta(hours=video_db.duration.hour,
+                                          minutes=video_db.duration.minute,
+                                          seconds=video_db.duration.second).total_seconds()
+            
+        if video_db is None or not duration:
+            video_details = client.get_videos(video_id)
+        
+            for video_id in video_details.keys():
+                channel_id = video_details[video_id]["channel_id"]
+
+                if not Channels.objects.filter(channel_id=channel_id).exists():
+                    channel_details = channel(request, channel_id)
+
+                    if channel_details.status_code == 404:
+                        raise Exception("Channel not found")
+
+                channel = Channels.objects.get(channel_id=channel_id)
+                print(video_details[video_id]["video_details"])
+                with transaction.atomic():
+                    if video_db is None:
+                        video_db = Videos(video_id=video_id,
+                                          channel_id=channel,
+                                          **video_details[video_id]["video_details"])
+
+                    else:
+                        video_db.__dict__.update(video_details[video_id]["video_details"])
+                        video_db.save()
+
         return JsonResponse(video_details)
     except Exception as err:
         return JsonResponse({"error": str(err),
