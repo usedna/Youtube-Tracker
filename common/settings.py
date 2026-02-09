@@ -129,4 +129,4 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 scopes = ["https://www.googleapis.com/auth/youtube.force-ssl"]
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-YT_API_KEY = "AIzaSyC7lXlxXGWqbJb0bR18I5i9uvblj--wc_U"
+YT_API_KEY = "API_KEY"
