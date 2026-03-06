@@ -1,43 +1,64 @@
-from django.http import JsonResponse, HttpResponseNotFound, HttpResponse
-from django.shortcuts import get_object_or_404, render
-from django.urls import reverse
-from django.views import generic
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404
 from django.db import IntegrityError, transaction
+from django.views import View
 
 from .models import Videos, Playlists, Channels, PlaylistsVideos
-from utils.youtube_client import get_youtube_client
+from api_client.youtube_service import get_youtube_service
+from django.shortcuts import render
 import datetime
 
 
-client = get_youtube_client()
+client = get_youtube_service()
 
-# TODO: Add use channel id parameter
-def channel(request, channel_name=None, channel_id=None):
-    try:
-        channel_details = client.get_channel_details(channel_name)
-        
-        if channel_details is None:
-            raise Exception("Channel not found")
-        
-        with transaction.atomic():
-            channels_db = Channels.objects.bulk_create([Channels(channel_id=channel_id, 
-                                                                **channel_details[channel_id]["details"])
-                                                      for channel_id in channel_details.keys()],
-                                                      ignore_conflicts=True)
-            
-        return JsonResponse(channel_details)
-    except IntegrityError:
-        return JsonResponse({"error": "error",
-                             "msg": "Channel already exists in the database"}, 
-                            status=400)
+# TODO: Use channel id parameter
+class Channel(View):
+    model = Channels
     
-    except Exception as err:
-        print(f"ERROR: Failed to add channels: {err}, {type(err)}")
-        return JsonResponse({"error": "error",
-                             "msg": "Channel not found"}, status=404)
+    def get(self, request, channel_name: str | None, channel_id: str | None):
+        try:
+            channel = self.model.objects.filter(channel_name=channel_name,
+                                                channel_id=channel_id).first()
+            
+
+            
+            return JsonResponse({"channel": channel.to_dict()})
+            
+        except Exception as err:
+            print(f"ERROR: Failed to fetch channel details: {err}, {type(err)}")
+            return JsonResponse({"error": "error",
+                                 "msg": "Channel name or channel id must be provided"}, 
+                                status=400)
+    
+    def post(self, request, 
+                channel_name: str | None=None, 
+                channel_id: str | None=None, 
+                *args, **kwargs):
+        try:
+            channel_details = client.get_channel_details(channel_name)
+
+            if channel_details is None:
+                raise Exception("Channel not found")
+
+            with transaction.atomic():
+                _ = Channels.objects.bulk_create([Channels(channel_id=channel_id, 
+                                                                     **channel_details[channel_id]["details"])
+                                                          for channel_id in channel_details.keys()],
+                                                          ignore_conflicts=True)
+
+            return JsonResponse(channel_details)
+        except IntegrityError:
+            return JsonResponse({"error": "error",
+                                 "msg": "Channel already exists in the database"}, 
+                                status=400)
+
+        except Exception as err:
+            print(f"ERROR: Failed to add channels: {err}, {type(err)}")
+            return JsonResponse({"error": "error",
+                                 "msg": "Channel not found"}, status=404)
 
 # TODO: Add channel_id parameter
-def channel_playlists(request, channel_name=None, channel_id=None):
+def channel_playlists(request, channel_name: str|None=None, channel_id: str|None=None):
     try:    
         if not Channels.objects.filter(channel_name=channel_name).exists():
             channel_details = channel(request, channel_name)
@@ -72,7 +93,7 @@ def channel_playlists(request, channel_name=None, channel_id=None):
                             status=404)
 
 
-def playlist_videos(request, playlist_id):
+def playlist_videos(request, playlist_id: str):
     try:
         
         playlist_db = get_object_or_404(Playlists, playlist_id=playlist_id)
@@ -100,7 +121,7 @@ def playlist_videos(request, playlist_id):
                              "msg": "Playlist items not found"}, 
                             status=404)
         
-def video(request, video_id):
+def video(request, video_id: str):
     try:
         video_details = {}
         
@@ -125,12 +146,11 @@ def video(request, video_id):
                     if channel_details.status_code == 404:
                         raise Exception("Channel not found")
 
-                channel = Channels.objects.get(channel_id=channel_id)
-                print(video_details[video_id]["video_details"])
+                channel_db = Channels.objects.get(channel_id=channel_id)
                 with transaction.atomic():
                     if video_db is None:
                         video_db = Videos(video_id=video_id,
-                                          channel_id=channel,
+                                          channel_id=channel_db,
                                           **video_details[video_id]["video_details"])
 
                     else:
@@ -144,4 +164,6 @@ def video(request, video_id):
                             status=404)
 
 
+def index(request):
+    return render(request, "index.html")
 

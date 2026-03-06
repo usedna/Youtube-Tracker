@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>YouTube Search</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com/4.0"></script>
+</head>
+<body class="bg-gray-50 font-sans">
+
+  <div class="max-w-xl mx-auto mt-20 p-6 bg-white shadow-md rounded-lg">
+    <h1 class="text-2xl font-bold text-center text-gray-800 mb-6">
+      YouTube Search
+    </h1>
+
+    <form id="searchForm" class="space-y-4">
+
+      <div class="flex flex-col">
+        <label class="text-gray-700 mb-1" for="query">Search</label>
+        <input
+          type="text"
+          id="query"
+          name="query"
+          class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          placeholder="Enter channel name or id"
+          required
+        />
+      </div>
+
+      <div class="flex flex-col">
+        <label class="text-gray-700 mb-1" for="type">Type</label>
+        <select
+          id="type"
+          name="type"
+          class="px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="channel">Channel</option>
+          <option value="playlist">Playlist</option>
+          <option value="video">Video</option>
+        </select>
+      </div>
+
+      <div class="text-center">
+        <button
+          type="submit"
+          class="px-4 py-2 bg-indigo-600 text-white font-semibold rounded hover:bg-indigo-700 transition"
+        >
+          Search
+        </button>
+      </div>
+
+    </form>
+  </div>
+
+  <!-- TypeScript module -->
+  <script type="module" src="./index.ts"></script>
+
+</body>
+</html>

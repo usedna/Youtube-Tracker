@@ -15,9 +15,6 @@ class Channels(models.Model):
     created_at = models.DateTimeField()
     country = models.CharField(max_length=10)
 
-    def __str__(self):
-        return self.channel_name
-
 
 class Playlists(models.Model):
     playlist_id = models.CharField(max_length=50,
@@ -27,9 +24,6 @@ class Playlists(models.Model):
     description = models.TextField(default="")
     videos_count = models.IntegerField(default=0)
     created_at = models.DateTimeField()
-    
-    def __str__(self):
-        return self.playlist_title
 
 
 class Videos(models.Model):
@@ -45,10 +39,9 @@ class Videos(models.Model):
     dimension = models.CharField(max_length=5, default="")
     definition = models.CharField(max_length=5, default="")
     paid = models.BooleanField(default=False)
+    caption = models.BooleanField(default=False)
     uploaded_at = models.DateTimeField()
 
-    def __str__(self):
-        return self.video_title
 
 class PlaylistsVideos(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
