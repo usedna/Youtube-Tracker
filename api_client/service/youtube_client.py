@@ -14,14 +14,13 @@ class YoutubeAPIClient:
         self._client = client
         self._logger = utils.get_logger(__name__)
     
-    
     def get_channels(self,
                      parameters: ChannelParameters,
                     **kwargs) -> dict[str, any]:
                 
         try:
             request = self._client.channels().list(id=parameters.id,
-                                                      forHandle=parameters.channel_name,
+                                                      forHandle=parameters.channel_handle,
                                                       part=parameters.properties_details,
                                                       maxResults=parameters.max_results,
                                                      **kwargs)

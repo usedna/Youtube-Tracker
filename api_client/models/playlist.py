@@ -14,8 +14,8 @@ class Details(BaseDataClass):
 
 @dataclass
 class ItemThumbnails(Thumbnails):
-    standard: dict
-    maxres: dict
+    standard: dict[str, any] = None
+    maxres: dict[str, any] = None
 
 @dataclass
 class Status(BaseDataClass):
@@ -31,6 +31,7 @@ class Playlist(BaseDataClass):
 class Playlists(BaseDataClass):
     playlists: list[Playlist]
     playlists_count: int
+    next_page_token: str | None = None
 
 @dataclass
 class ItemDetails(BaseDataClass):
@@ -40,7 +41,7 @@ class ItemDetails(BaseDataClass):
 
 @dataclass
 class Item(BaseDataClass):
-    video_details: VideoBasicDetails
+    details: VideoBasicDetails
     item: ItemDetails
     thumbnails: ItemThumbnails
     
@@ -49,3 +50,4 @@ class Item(BaseDataClass):
 class PlaylistItems(BaseDataClass):
     items: list[Item]
     items_count: int
+    next_page_token: str | None = None

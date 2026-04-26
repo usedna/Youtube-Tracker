@@ -7,8 +7,9 @@ class Details(BaseDataClass):
     channel_id: str
     uploads_id: str
     channel_name: str
+    channel_handle: str
     etag: str
-    description: str
+    channel_description: str
     created_at: str
     country: str
 
@@ -43,7 +44,7 @@ class Status(BaseDataClass):
     privacy: str
     is_linked: bool
     long_uploads_status: str
-    made_for_kids: bool
+    made_for_kids: bool = False
     
 @dataclass
 class Channel(BaseDataClass):

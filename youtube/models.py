@@ -7,9 +7,14 @@ import uuid
 class Channels(models.Model):
     channel_id = models.CharField(max_length=30, 
                                   primary_key=True)
+    channel_handle = models.CharField(max_length=50,
+                                    unique=True,
+                                    null=False,
+                                    default="")
     channel_name = models.CharField(max_length=50,
                                     unique=True,
                                     null=False)
+    uploads_id = models.CharField(max_length=30)
     etag = models.CharField(max_length=100)
     channel_description = models.TextField()
     created_at = models.DateTimeField()

@@ -3,8 +3,10 @@ import isodate
 from api_client.models import channel, playlist, video
 
 class YoutubeAPIDataParser():      
-    def parse_channel_info(self, api_response: dict[str, any]) -> list[channel.Channel]:
-        channels = []
+    def parse_channel_info(self, 
+                           api_response: dict[str, any],
+                           raw: bool = True) -> list[channel.Channel]:
+        result = []
         
         for item in api_response["items"]:
             snippet = item["snippet"]
@@ -15,25 +17,29 @@ class YoutubeAPIDataParser():
             
             channel_data = channel.Channel(channel.Details(channel_id=item["id"],
                                                            uploads_id=item["contentDetails"]["relatedPlaylists"]["uploads"],
+                                                           channel_handle=snippet["customUrl"],
                                                            channel_name=snippet["title"],
                                                            etag=item["etag"],
-                                                           description=snippet["description"],
+                                                           channel_description=snippet["description"],
                                                            created_at=snippet["publishedAt"],
                                                            country=snippet["country"],),
-                                           channel.Statistics(*statistics),
-                                           channel.Topics(*topics),
-                                           channel.Thumbnails(**snippet["thumbnails"]),
-                                           channel.BannerImage(banner_image_url=banner["image"]["bannerExternalUrl"],),
-                                           channel.Keywords(keywords=banner["channel"]["keywords"],),
-                                           channel.Status(*status))
+                                           statistics=channel.Statistics(*statistics),
+                                           topics=channel.Topics(*topics),
+                                           thumbnails=channel.Thumbnails(**snippet["thumbnails"]),
+                                           banner_image=channel.BannerImage(banner_image_url=banner["image"]["bannerExternalUrl"],),
+                                           keywords=channel.Keywords(keywords=banner["channel"]["keywords"],),
+                                           status=channel.Status(*status),
+                                           )
             
-            channels.append(channel_data)
+            result.append(channel_data if not raw else channel_data.to_dict())
 
-        return channels
-    
-    def parse_playlists_info(self, api_response: dict[str, any]) -> playlist.Playlists:
+        return result
+
+    def parse_playlists_info(self, api_response: dict[str, any],
+                             raw: bool = True) -> playlist.Playlists:
         playlists = []
-        total_results = api_response["pageInfo"]["totalResults"],
+        total_results = api_response["pageInfo"]["totalResults"]
+        next_page_token = api_response.get("nextPageToken")
 
         for item in api_response["items"]:
             snippet = item["snippet"]
@@ -46,14 +52,22 @@ class YoutubeAPIDataParser():
                                               playlist.ItemThumbnails(**snippet["thumbnails"]),
                                               playlist.Status(privacy_status=item["status"]["privacyStatus"],),)
                          
-            playlists.append([playlist_data])
-            
-        return playlist.Playlists(playlists=playlists, 
-                                  playlists_count=total_results)
+            playlists.append(playlist_data if not raw else playlist_data.to_dict())
+        
+        results = playlist.Playlists(playlists=playlists, 
+                                     playlists_count=total_results,
+                                     next_page_token=next_page_token)
+        
+        if raw:
+            return results.to_dict()
+        
+        return result
     
-    def parse_playlist_items_info(self, api_response: dict[str, any]) -> playlist.PlaylistItems:            
+    def parse_playlist_items_info(self, api_response: dict[str, any],
+                                  raw: bool = True) -> playlist.PlaylistItems:            
         items = []
-        total_results = api_response["pageInfo"]["totalResults"],
+        total_results = api_response["pageInfo"]["totalResults"]
+        next_page_token = api_response.get("nextPageToken")
         
         for item in api_response["items"]:
             snippet = item["snippet"]
@@ -67,15 +81,23 @@ class YoutubeAPIDataParser():
                                                         published_at=snippet["publishedAt"],),
                                    playlist.ItemThumbnails(**snippet["thumbnails"]),)
 
-            items.append(item)
-            
-        return playlist.PlaylistItems(items=items,
-                                      items_count=total_results)
+            items.append(item if not raw else item.to_dict())
+        
+        result = playlist.PlaylistItems(items=items, 
+                                        items_count=total_results,
+                                        next_page_token=next_page_token)
+        
+        if raw:
+            return result.to_dict()
+        
+        return result
  
-    def parse_videos_info(self, api_response: dict[str, any]) -> list[video.Video]:
+    def parse_videos_info(self, api_response: dict[str, any],
+                          raw: bool = True) -> list[video.Video]:
+        
+        results = []
         
         for item in api_response["items"]:
-            videos = []
             snippet = item["snippet"]
             content_details = item["contentDetails"]
             statistics = item["statistics"].values()
@@ -98,7 +120,7 @@ class YoutubeAPIDataParser():
                                         video.Topics(categories=item["topicDetails"]["topicCategories"],),
                                         video.Status(*status),
                                         )
-            videos.append(video_data)
-
-        return videos
+            results.append(video_data if not raw else video_data.to_dict())
+        
+        return results
     

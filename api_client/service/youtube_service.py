@@ -1,11 +1,9 @@
-from api_client.youtube_parser import YoutubeAPIDataParser
-from api_client.youtube_client import YoutubeAPIClient
+from api_client.service.youtube_parser import YoutubeAPIDataParser
+from api_client.service.youtube_client import YoutubeAPIClient
 from api_client.models.parameters import ChannelParameters, PlaylistParameters, PlaylistItemParameters, VideoParameters
-from api_client.utils import create_client
 from api_client.utils import get_logger
 from api_client.erros import handle_error
 from typing import Literal, Iterable
-from common.settings import YT_API_KEY, scopes
 
 
 class YoutubeDataService:    
@@ -59,7 +57,8 @@ class YoutubeDataService:
         if "items" not in api_response or not len(api_response["items"]):
             raise ValueError("API response is missing 'items' or it is empty")
 
-    def get_channel_details(self, parameters: ChannelParameters , **kwargs) -> dict[str, any]:
+    def get_channel_details(self, parameters: ChannelParameters,
+                            **kwargs) -> dict[str, any]:
         resp = {}
         
         try:
@@ -67,10 +66,12 @@ class YoutubeDataService:
                                                                 self._DEFAULT_CHANNEL_PROPERTIES)
             
             api_response = self.client.get_channels(parameters=parameters,
-                                                         **kwargs)
+                                                    **kwargs)
             self._check_api_reponse(api_response)
 
             resp = self.parser.parse_channel_info(api_response)
+            
+            self._logger.debug(f"Successfully fetched channel details from API: {resp=}")
             
         except Exception as err:
             print(f"Failed to fetch requested channels from API: {err=}, {type(err)=}")
@@ -87,11 +88,13 @@ class YoutubeDataService:
                                                                 self._DEFAULT_PLAYLIST_PROPERTIES)
             
             api_response = self.client.get_playlists(parameters=parameters,
-                                                          **kwargs)
+                                                     **kwargs)
             
             self._check_api_reponse(api_response)
             
             resp = self.parser.parse_playlists_info(api_response)
+            
+            self._logger.debug(f"Successfully fetched playlists from API: {resp=}")
         
         except Exception as err:
             resp = {"error": type(err),
@@ -115,6 +118,8 @@ class YoutubeDataService:
             self._check_api_reponse(api_response)
 
             resp = self.parser.parse_playlist_items_info(api_response)
+            
+            self._logger.debug(f"Successfully fetched requested playlist items from API: {resp=}")
         
         except Exception as err:
             print(f"Failed to fetch requested playlist items from API: {err=}, {type(err)=}")
@@ -131,11 +136,13 @@ class YoutubeDataService:
                                                                 self._DEFAULT_VIDEO_PROPERTIES)
             
             api_response = self.client.get_videos(parameters=parameters,
-                                                       **kwargs)
+                                                  **kwargs)
 
             self._check_api_reponse(api_response)
 
             resp = self.parser.parse_videos_info(api_response)
+            
+            self._logger.debug(f"Successfully fetched requested videos from API: {resp=}")
 
         except Exception as err:
 
@@ -145,10 +152,3 @@ class YoutubeDataService:
         finally:
             return resp
 
-
-def get_youtube_service():
-    client = create_client(api_key=YT_API_KEY, scopes=scopes)
-    parser = YoutubeAPIDataParser()
-    api_client = YoutubeAPIClient(client)
-    service = YoutubeDataService(api_client, parser)
-    return service

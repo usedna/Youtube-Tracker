@@ -3,7 +3,7 @@ from api_client.models.base import BaseParameters
 
 @dataclass
 class ChannelParameters(BaseParameters):
-    channel_name: str | None = None
+    channel_handle: str | None = None
 
 @dataclass
 class PlaylistParameters(BaseParameters):

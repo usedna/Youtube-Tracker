@@ -4,49 +4,48 @@ from django.db import IntegrityError, transaction
 from django.views import View
 
 from .models import Videos, Playlists, Channels, PlaylistsVideos
+from api_client.models import parameters
 from api_client.youtube_service import get_youtube_service
 from django.shortcuts import render
+from django.views.decorators.csrf import ensure_csrf_cookie, csrf_exempt
+from django.utils.decorators import method_decorator
 import datetime
 
 
 client = get_youtube_service()
 
 # TODO: Use channel id parameter
+@method_decorator(csrf_exempt, name='dispatch')
 class Channel(View):
     model = Channels
     
-    def get(self, request, channel_name: str | None, channel_id: str | None):
+    @staticmethod
+    def get_parameters(**kwargs):
+        channel_handle = kwargs.get("handle", None)
+        channel_id = kwargs.get("id", None)  
+        print(f"Received parameters: channel_handle={channel_handle is None}, channel_id={channel_id is None}")
+        if channel_handle is None and channel_id is None:
+            raise ValueError("At least one of channel handle or channel id must be provided")
+  
+        return channel_handle, channel_id
+        
+    def post(self, request, **kwargs):
         try:
-            channel = self.model.objects.filter(channel_name=channel_name,
-                                                channel_id=channel_id).first()
-            
+            channel_handle, channel_id = self.get_parameters(**kwargs)
 
-            
-            return JsonResponse({"channel": channel.to_dict()})
-            
-        except Exception as err:
-            print(f"ERROR: Failed to fetch channel details: {err}, {type(err)}")
-            return JsonResponse({"error": "error",
-                                 "msg": "Channel name or channel id must be provided"}, 
-                                status=400)
-    
-    def post(self, request, 
-                channel_name: str | None=None, 
-                channel_id: str | None=None, 
-                *args, **kwargs):
-        try:
-            channel_details = client.get_channel_details(channel_name)
+            channel_details = client.get_channel_details(parameters=parameters.ChannelParameters(channel_handle=channel_handle,
+                                                                                                 id=channel_id))
 
             if channel_details is None:
                 raise Exception("Channel not found")
 
             with transaction.atomic():
-                _ = Channels.objects.bulk_create([Channels(channel_id=channel_id, 
-                                                                     **channel_details[channel_id]["details"])
-                                                          for channel_id in channel_details.keys()],
+                print(f"Saving channel details to the database:", channel_details[0]["details"])
+                _ = Channels.objects.bulk_create([Channels(**channel["details"])
+                                                          for channel in channel_details],
                                                           ignore_conflicts=True)
-
-            return JsonResponse(channel_details)
+                
+            return JsonResponse({"msg": channel_details})
         except IntegrityError:
             return JsonResponse({"error": "error",
                                  "msg": "Channel already exists in the database"}, 
@@ -56,7 +55,21 @@ class Channel(View):
             print(f"ERROR: Failed to add channels: {err}, {type(err)}")
             return JsonResponse({"error": "error",
                                  "msg": "Channel not found"}, status=404)
-
+    
+    def get(self, request, **kwargs):
+        try:
+            channel_handle, channel_id = self.get_parameters(**kwargs)
+            
+            channel = self.model.objects.get(channel_name="janghinaro")
+            print(f"Channel found in the database: {channel}")
+            return JsonResponse({"channel": dict(channel)})
+            
+        except Exception as err:
+            print(f"ERROR: Failed to fetch channel details: {err}, {type(err)}")
+            return JsonResponse({"error": "error",
+                                 "msg": "Channel not found"}, 
+                                  status=404)
+    
 # TODO: Add channel_id parameter
 def channel_playlists(request, channel_name: str|None=None, channel_id: str|None=None):
     try:    
