@@ -50,8 +50,8 @@ def create_client(secret_file: str | None = None,
     
     except Exception as err:
         logger.debug(f"Unexpected {err=}, {type(err)=}")
-        
-        
+
+    
 def add_counting_prefix_to_file(base_name: str, file_dir: str) -> str:    
     dir_list = [f for f in os.listdir(file_dir) if base_name in f]
     

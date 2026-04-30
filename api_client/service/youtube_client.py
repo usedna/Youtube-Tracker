@@ -14,90 +14,71 @@ class YoutubeAPIClient:
         self._client = client
         self._logger = utils.get_logger(__name__)
     
+    def _fetch_data(self, obj_name: str, obj_type: str = "", op_type: str = "list", save_to_file: bool = False, **kwargs) -> dict[str, any]:
+        try:
+            if not obj_type.strip():
+                obj_type = f"{obj_name}"
+            
+            func = getattr(self._client, obj_type)()
+            request = getattr(func, op_type)(**kwargs)
+            response = request.execute()
+            
+            if save_to_file:
+                save_response_to_file(response, f"{obj_name}_{op_type}_response.json")
+
+        except Exception as err:
+            response = {"error": err,
+                        "context": f"{obj_name}_{op_type}",}
+            print(f"Failed to fetch {obj_name} data: {err}, {type(err)}")
+            self._logger.debug(f"Failed to fetch {obj_name} data: {err}, {type(err)}")
+        
+        finally:
+            return response
+    
     def get_channels(self,
                      parameters: ChannelParameters,
                     **kwargs) -> dict[str, any]:
-                
-        try:
-            request = self._client.channels().list(id=parameters.id,
-                                                      forHandle=parameters.channel_handle,
-                                                      part=parameters.properties_details,
-                                                      maxResults=parameters.max_results,
-                                                     **kwargs)
-            response = request.execute()
-                        
-        except Exception as err:
-            response = {"error": err,
-                        "context": "channels",}
-            
-            print(f"Failed to fetch channels: {err}, {type(err)}")
-            self._logger.debug(f"Failed to fetch channels: {err}, {type(err)}")
-            
-        finally:
-            return response
+        
+        return self._fetch_data(obj_name="channels", 
+                                op_type="list",  
+                                id=parameters.id,
+                                forHandle=parameters.channel_handle,
+                                part=parameters.properties_details,
+                                maxResults=parameters.max_results,
+                                **kwargs)
 
     def get_playlists(self,
                       parameters: PlaylistParameters,
                       **kwargs) -> dict[str, any]:
-        try:            
-            request = self._client.playlists().list(
-                                                   channelId=parameters.channel_id,
-                                                   id=parameters.id,
-                                                   part=parameters.properties_details,
-                                                   maxResults=parameters.max_results,
-                                                   **kwargs)
-            response = request.execute()
-            
-            save_response_to_file(response, "playlists_response.json")
-
-        except Exception as err:
-            response = {"error": err,
-                        "context": "playlists",}
-            print(f"Failed to fetch playlists: {err}, {type(err)}")
-            self._logger.debug(f"Failed to fetch playlists: {err}, {type(err)}")
-            
-        finally:
-            return response
+        
+        return self._fetch_data(obj_name="playlists",
+                                op_type="list",
+                                channelId=parameters.channel_id,
+                                id=parameters.id,
+                                part=parameters.properties_details,
+                                maxResults=parameters.max_results,
+                                **kwargs)
 
     def get_playlist_items(self,
                            parameters: PlaylistItemParameters,
                            **kwargs) -> dict | None:
-        try:
-            request = self._client.playlistItems().list(playlistId=parameters.playlist_id,
-                                                        id=parameters.id,
-                                                        part=parameters.properties_details, 
-                                                        maxResults=parameters.max_results,
-                                                        **kwargs)
-            response = request.execute()
-
-            save_response_to_file(response, "playlist_items_response.json")
-
-        except Exception as err:
-            response = {"error": err,
-                        "context": "playlist_items",}
-            print(f"Failed to fetch playlist items: {err}, {type(err)}")
-            self._logger.debug(f"Failed to fetch playlist items: {err}, {type(err)}")
         
-        finally:
-            return response
+        return self._fetch_data(obj_name="playlist_items",
+                                obj_type="playlistItems",
+                                op_type="list",
+                                playlistId=parameters.playlist_id,
+                                id=parameters.id,
+                                part=parameters.properties_details,
+                                maxResults=parameters.max_results,
+                                **kwargs)
 
     def get_videos(self, 
                    parameters: VideoParameters,
                    **kwargs) -> dict[str, any]:
-        try:
-            request = self._client.videos().list(part=parameters.properties_details, 
-                                                id=parameters.id,
-                                                maxResults=parameters.max_results,
-                                                **kwargs)
-            response = request.execute()
-            
-            save_response_to_file(response, "videos_response.json")
-
-        except Exception as err:
-            response = {"error": err,
-                        "context": "videos",}
-            print(f"Failed to fetch videos: {err}, {type(err)}")
-            self._logger.debug(f"Failed to fetch videos: {err}, {type(err)}")
         
-        finally:
-            return response
+        return self._fetch_data(obj_name="videos",
+                                op_type="list",
+                                id=parameters.id,
+                                part=parameters.properties_details,
+                                maxResults=parameters.max_results,
+                                **kwargs)
