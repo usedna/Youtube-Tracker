@@ -1,9 +1,10 @@
 from dataclasses import dataclass
-from api_client.models.base import BaseDataClass
+from app.api_client.models.base import BaseDataClass
 
 @dataclass
 class VideoBasicDetails(BaseDataClass):
     video_id: str
+    channel_id: str
     video_title: str
     video_description: str
     uploaded_at: str

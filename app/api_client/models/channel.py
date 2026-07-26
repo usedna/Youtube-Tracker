@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from api_client.models.base import BaseDataClass
+from app.api_client.models.base import BaseDataClass
 
 
 @dataclass

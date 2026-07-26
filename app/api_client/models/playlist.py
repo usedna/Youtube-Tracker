@@ -1,12 +1,13 @@
 from dataclasses import dataclass
-from api_client.models.channel import Thumbnails
-from api_client.models.video import VideoBasicDetails
-from api_client.models.base import BaseDataClass
+from app.api_client.models.channel import Thumbnails
+from app.api_client.models.video import VideoBasicDetails
+from app.api_client.models.base import BaseDataClass
 
 
 @dataclass
 class Details(BaseDataClass):
     playlist_id: str
+    channel_id: str
     playlist_title: str
     description: str
     videos_count: int
@@ -36,6 +37,7 @@ class Playlists(BaseDataClass):
 @dataclass
 class ItemDetails(BaseDataClass):
     item_id: str
+    playlist_id: str
     position: int
     published_at: str
 

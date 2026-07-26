@@ -21,6 +21,10 @@ def get_logger(name: str,
 
 logger = get_logger(__name__)
 
+    
+def save_json(data: dict[str, any], filename: str):
+    with open(filename, "w") as f:
+        json.dump(data, f, indent=4)
 
 def create_client(secret_file: str | None = None, 
                   api_key: str | None = None, 
@@ -127,8 +131,7 @@ def export_to_pandas(data: dict|list[dict]) -> pd.DataFrame:
 def export_to_json(data: dict, file_name: str = "result", file_dir: str = "results/json", replace: bool = False):        
     file_path = get_file_path(file_name, file_dir, "json", count_file=not replace)
     
-    with open(file_path, "w+") as f:
-        json.dump(data, f, indent=4)
+    save_json(data, file_path)
 
 
 def export_to_csv(data: dict, file_name: str = "result", file_dir: str = "results/csv", replace: bool = False):

@@ -1,6 +1,7 @@
 
 import isodate
-from api_client.models import channel, playlist, video
+from app.api_client.models import video
+from app.api_client.models import channel, playlist
 
 def parse_channel_info(api_response: dict[str, any],
                        raw: bool = True) -> list[channel.Channel]:
@@ -43,6 +44,7 @@ def parse_playlists_info(api_response: dict[str, any],
         snippet = item["snippet"]
         
         playlist_data = playlist.Playlist(playlist.Details(playlist_id=item["id"],
+                                                           channel_id=snippet["channelId"],
                                                            playlist_title=snippet["title"],
                                                            videos_count=int(item["contentDetails"]["itemCount"]),
                                                            description=snippet["description"],
@@ -72,10 +74,13 @@ def parse_playlist_items_info(api_response: dict[str, any],
         snippet = item["snippet"]
         
         item = playlist.Item(video.VideoBasicDetails(video_id=snippet["resourceId"]["videoId"],
+                                                     channel_id=snippet["channelId"],
                                                      video_title=snippet["title"],
                                                      video_description=snippet["description"],
-                                                     uploaded_at=item["contentDetails"]["videoPublishedAt"],),
+                                                     uploaded_at=item["contentDetails"]["videoPublishedAt"],
+                                                     ),
                                playlist.ItemDetails(item_id=item["id"],
+                                                    playlist_id=snippet["playlistId"],
                                                     position=snippet["position"],
                                                     published_at=snippet["publishedAt"],),
                                playlist.ItemThumbnails(**snippet["thumbnails"]),)
