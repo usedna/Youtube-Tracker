@@ -109,6 +109,7 @@ def parse_videos_info(api_response: dict[str, any],
         duration = str(isodate.parse_duration(content_details["duration"]))
         
         video_data = video.Video(video.VideoDetails(video_id=item["id"],
+                                                    channel_id=snippet["channelId"],
                                                     video_title=snippet["title"],
                                                     video_description=snippet["description"],
                                                     uploaded_at=snippet["publishedAt"],

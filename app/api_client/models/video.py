@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import timedelta
 from app.api_client.models.base import BaseDataClass
 
 @dataclass
@@ -12,9 +13,9 @@ class VideoBasicDetails(BaseDataClass):
 @dataclass
 class VideoDetails(VideoBasicDetails):
     etag: str
-    duration: str
+    duration: timedelta
     language: str
-    tags: list[str]
+    tags: list[str] | None
     dimension: str
     definition: str
     caption: bool

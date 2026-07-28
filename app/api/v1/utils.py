@@ -1,7 +1,7 @@
 """
 Dependencies for FastAPI routes
 """
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from fastapi import HTTPException
 import sys
 import os
@@ -26,6 +26,14 @@ def get_timestamp_from_iso(iso_str: str) -> datetime:
     return iso_str
 
 
+def get_interval_from_str(iso_str: str) -> timedelta:
+    try:
+        hours, minutes, seconds = map(int, iso_str.split(':'))
+        return timedelta(hours=hours, minutes=minutes, seconds=seconds)
+    except Exception:
+        return timedelta(0)
+
+
 def get_youtube_service() -> YoutubeDataService:
     """Dependency to get YouTube service instance."""
     
@@ -46,27 +54,27 @@ def get_youtube_service() -> YoutubeDataService:
 def unpack_channel_details(item: dict) -> dict:
     """Unpack channel details from the API response."""
     
-    details = item.get("details") if isinstance(item, dict) else getattr(item, "details", None)
+    details = item.get("details")
     if not details:
         return None
 
-    channel_id = details.get("channel_id")
-    if not channel_id:
+    channel_id = details["channel_id"]
+    if not channel_id.strip():
         return None
 
-    created_at = details.get("created_at")
+    created_at = details["created_at"]
     if created_at:
         created_at = get_timestamp_from_iso(created_at)
 
     return {
         "channel_id": channel_id,
-        "channel_handle": details.get("channel_handle"),
-        "etag": details.get("etag"),
-        "upload_id": details.get("upload_id"),
-        "channel_name": details.get("channel_name"),
-        "channel_description": details.get("channel_description"),
+        "channel_handle": details["channel_handle"],
+        "etag": details["etag"],
+        "upload_id": details["upload_id"],
+        "channel_name": details["channel_name"],
+        "channel_description": details["channel_description"],
         "created_at": created_at if created_at else date.today(),
-        "country": details.get("country"),
+        "country": details["country"],
     }
 
 def unpack_playlists(playlists: dict) -> dict:
@@ -77,13 +85,13 @@ def unpack_playlists(playlists: dict) -> dict:
         if not details:
             continue
         
-        status = playlist.get("status")
-        playlist_id = details.get("playlist_id")
-        channel_id = details.get("channel_id")
-        if not playlist_id or not channel_id:
+        status = playlist["status"]
+        playlist_id = details["playlist_id"]
+        channel_id = details["channel_id"]
+        if not playlist_id.strip() or not channel_id.strip():
             continue
         
-        created_at = details.get("created_at")
+        created_at = details["created_at"]
         
         if created_at:
             created_at = get_timestamp_from_iso(created_at)
@@ -91,11 +99,11 @@ def unpack_playlists(playlists: dict) -> dict:
         yield {
             "playlist_id": playlist_id,
             "channel_id": channel_id,
-            "playlist_title": details.get("playlist_title"),
-            "description": details.get("description"),
-            "videos_count": details.get("videos_count") or 0,
+            "playlist_title": details["playlist_title"],
+            "description": details["description"],
+            "videos_count": details["videos_count"],
             "created_at": created_at if created_at else date.today(),
-            "status": status.get("privacy_status"),
+            "status": status["privacy_status"],
         }
 
 def unpack_playlist_items(items: dict) -> dict:
@@ -107,38 +115,71 @@ def unpack_playlist_items(items: dict) -> dict:
         if not video_details and not item_details:
             continue
         
-        video_id = video_details.get("video_id")
-        item_id = item_details.get("item_id")
-        playlist_id = item_details.get("playlist_id")
-        channel_id = video_details.get("channel_id")
+        video_id = video_details["video_id"]
+        item_id = item_details["item_id"]
+        playlist_id = item_details["playlist_id"]
+        channel_id = video_details["channel_id"]
         
-        if not video_id and not item_id and not playlist_id and not channel_id:
+        if not video_id.strip() and not item_id.strip() and not playlist_id.strip() and not channel_id.strip():
             continue
         
         uploaded_at = video_details.get("uploaded_at")
         published_at = item_details.get("published_at")
         
-        if published_at:
+        if not published_at.strip():
             published_at = get_timestamp_from_iso(published_at)
         
-        if uploaded_at:
+        if not uploaded_at.strip():
             uploaded_at = get_timestamp_from_iso(uploaded_at)    
 
         yield {
             "video": {
                 "video_id": video_id,
                 "channel_id": channel_id,
-                "video_title": video_details.get("video_title"),
-                "video_description": video_details.get("video_description"),
+                "video_title": video_details["video_title"],
+                "video_description": video_details["video_description"],
                 "uploaded_at": uploaded_at if uploaded_at else date.today(),
             },
             "item": {
                 "item_id": item_id,
                 "playlist_id": playlist_id,
-                "position": item_details.get("position") or 0,
+                "position": item_details["position"],
                 "published_at": published_at,
             },
         }
+
+def unpack_video_details(item: dict) -> dict:
+    """Unpack video details from the API response."""
+    
+    details = item.get("details")
+    if not details:
+        return None
+
+    video_id = details["video_id"]
+    if not video_id.strip():
+        return None
+
+    uploaded_at = details["uploaded_at"]
+    if uploaded_at:
+        uploaded_at = get_timestamp_from_iso(uploaded_at)
+        
+    duration = get_interval_from_str(details["duration"])
+
+    return {
+        "video_id": video_id,
+        "channel_id": details["channel_id"],
+        "etag": details["etag"],
+        "video_title": details["video_title"],
+        "duration": duration,
+        "video_description": details["video_description"],
+        "language": details["language"],
+        "tags": details["tags"],
+        "dimension": details["dimension"],
+        "definition": details["definition"],
+        "paid": bool(details.get("paid")),
+        "captions": bool(details.get("caption") or details.get("captions")),
+        "uploaded_at": uploaded_at if uploaded_at else date.today(),
+    }
 
 service = get_youtube_service()
  

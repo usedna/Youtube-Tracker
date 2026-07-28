@@ -1,6 +1,7 @@
-from sqlalchemy import Column, String, Date, Boolean, Time, ForeignKey, Integer, BigInteger
+from sqlalchemy import Column, String, Date, Boolean, Interval, ForeignKey, Integer, BigInteger
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from api.v1.database import Base
+import datetime
 import uuid
 
 class Channel(Base):
@@ -25,7 +26,7 @@ class Video(Base):
     channel_id = Column(String, ForeignKey("channels.channel_id", ondelete="CASCADE", onupdate="CASCADE"), nullable=False)
     etag = Column(String, nullable=True)
     video_title = Column(String, default="", nullable=False)
-    duration = Column(ARRAY(Time), default=[], nullable=False)
+    duration = Column(Interval, default=datetime.timedelta(0), nullable=False)
     video_description = Column(String, nullable=True)
     language = Column(String(5), nullable=True)
     tags = Column(String, nullable=True)

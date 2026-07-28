@@ -1,15 +1,15 @@
 """
 Videos API routes
 """
-from datetime import datetime, date, time
-import isodate
+
+from datetime import timedelta
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from api.v1.models.request import VideoRequestById, BatchResponse, APIResponse
 from api.v1.database import DBSessionDep, get_session
-from app.api.v1.models.media_db import Video
-from api.v1.utils import service
+from app.api.v1.models.media_db import Channel, Video
+from api.v1.utils import service, unpack_video_details
 
 
 logger = logging.getLogger(__name__)
@@ -32,64 +32,19 @@ async def get_videos_by_ids(
         )
         # Persist videos to DB (upsert) when possible
         for item in result:
-            details = item.get("details") if isinstance(item, dict) else getattr(item, "details", None)
+            details = item.get("details")
             if not details:
                 continue
 
-            video_id = details.get("video_id")
-            if not video_id:
-                continue
+            checked_items = set()
+            for video_item in unpack_video_details(details):
+                
+                if video_item["channel_id"] not in checked_items:
+                    obj_item = {"channel_id": video_item["channel_id"]}
+                    Channel.get_or_create(session, **obj_item)
+                    checked_items.add(video_item["video_id"])
 
-            # attempt to extract channel_id if present
-            channel_id = details.get("channel_id") or item.get("channel_id")
-            if not channel_id:
-                # skip saving when required foreign key is missing
-                logger.debug("Skipping save for video %s: missing channel_id", video_id)
-                continue
-
-            # parse uploaded date
-            uploaded_at_str = details.get("uploaded_at") or details.get("uploadedAt")
-            uploaded_at = None
-            if uploaded_at_str:
-                try:
-                    uploaded_at = datetime.fromisoformat(uploaded_at_str.replace("Z", "")).date()
-                except Exception:
-                    try:
-                        uploaded_at = date.fromisoformat(uploaded_at_str[:10])
-                    except Exception:
-                        uploaded_at = None
-
-            # parse duration (string to time)
-            duration_val = details.get("duration")
-            duration_array = None
-            if duration_val:
-                try:
-                    td = isodate.parse_duration(duration_val) if isinstance(duration_val, str) else duration_val
-                    seconds = int(td.total_seconds())
-                    h = (seconds // 3600) % 24
-                    m = (seconds % 3600) // 60
-                    s = seconds % 60
-                    duration_array = [time(h, m, s)]
-                except Exception:
-                    duration_array = None
-
-            
-            obj = Video(
-                video_id=video_id,
-                channel_id=channel_id,
-                etag=details.get("etag") or item.get("etag"),
-                video_title=details.get("video_title"),
-                duration=duration_array if duration_array is not None else [],
-                video_description=details.get("video_description"),
-                language=details.get("language"),
-                tags=",".join(details.get("tags") or []) if isinstance(details.get("tags"), list) else details.get("tags"),
-                dimension=details.get("dimension"),
-                definition=details.get("definition"),
-                paid=bool(details.get("paid")),
-                captions=bool(details.get("caption") or details.get("captions")),
-                uploade_at=uploaded_at if uploaded_at else date.today(),
-            )
-            session.add(obj)
+                Video.update_or_create(session, fkey=["video_id"], **video_item)
             
         try:
             session.commit()
@@ -106,6 +61,36 @@ async def get_videos_by_ids(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch videos: {str(e)}")
 
+@router.put("/auto", response_model=APIResponse)
+async def auto_update_videos(
+    session: DBSessionDep,
+    limit: int = 100) -> APIResponse:
+    """Automatically update videos in the database."""
+    try:
+        # Fetch videos from the database
+        videos = session.query(Video).limit(limit).all()
+        video_ids = [video.video_id for video in videos]
+
+        if not video_ids:
+            return APIResponse(success=True, data="No videos to update.")
+
+        # Fetch updated video details from the service
+        result = service.get_videos_by_id(video_ids=video_ids)
+
+        # Update videos in the database
+        for item in result:
+            
+            video_item = unpack_video_details(item)
+            Video.update_or_create(session, fkey=["video_id"], **video_item)
+
+        try:
+            session.commit()
+        except Exception:
+            session.rollback()
+
+        return APIResponse(success=True, data=result)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to auto-update videos: {str(e)}")
 
 @router.get("/info")
 async def get_videos_info(
@@ -116,13 +101,15 @@ async def get_videos_info(
     """Return videos stored in the database (up to 100 rows)."""
     rows = session.query(Video).limit(limit).all()
     result = []
+    total_time = timedelta(0)
     for r in rows:
+        total_time += r.duration
         result.append({
             "video_id": r.video_id,
             "channel_id": r.channel_id,
             "etag": r.etag,
             "video_title": r.video_title,
-            "duration": [d.isoformat() for d in (r.duration or [])],
+            "duration": r.duration,
             "video_description": r.video_description,
             "language": r.language,
             "tags": r.tags,
@@ -133,4 +120,4 @@ async def get_videos_info(
             "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
         })
 
-    return {"count": len(result), "videos": result}
+    return {"count": len(result), "total_watch_time": str(total_time), "videos": result}

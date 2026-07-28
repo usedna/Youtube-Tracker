@@ -28,7 +28,7 @@ async def get_channels_by_ids(
             channel_ids=request.channel_ids,
             properties=request.properties,
             max_results=request.max_results
-        )
+            )
 
         # Persist channels to DB (upsert)
         for item in result:
@@ -37,9 +37,7 @@ async def get_channels_by_ids(
             if not details:
                 continue
             
-            obj = Channel(**details)
-            session.add(obj)
-
+            Channel.update_or_create(session, fkey=["channel_id"], **details)
         try:
             session.commit()
         except Exception as e:
@@ -50,9 +48,9 @@ async def get_channels_by_ids(
             api_response=APIResponse(
                 success=True,
                 data=result
-            ),
+                ),
             count=len(result) if isinstance(result, list) else 1
-        )
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch channels: {str(e)}")
 
@@ -78,10 +76,8 @@ async def get_channels_by_handles(
             details = unpack_channel_details(item)
             if not details:
                 continue
-
-            obj = Channel(**details)
-            session.add(obj)
             
+            Channel.update_or_create(session, fkey=["channel_id"], **details)            
         try:
             session.commit()
         except Exception:
@@ -89,11 +85,11 @@ async def get_channels_by_handles(
 
         return BatchResponse(
             api_response=APIResponse(
-                success=True,
-                data=result
-            ),
+                         success=True,
+                         data=result
+                         ),
             count=len(result) if isinstance(result, list) else 1
-        )
+            )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch channels: {str(e)}")
 

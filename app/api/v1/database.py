@@ -15,37 +15,39 @@ class Base(DeclarativeBase):
     schema = "public"
     
     @classmethod
-    def get_or_create(cls, session, fkey=[], **kwargs):
-        """Get an existing record or create a new one."""
+    def filter_by(cls, session, fkey=[], **kwargs):
+        """Filter records based on provided keyword arguments."""
         if fkey:
             filters = {key: kwargs[key] for key in fkey if key in kwargs}
-            instance = session.query(cls).filter_by(**filters).first()
         else:
-            instance = session.query(cls).filter_by(**kwargs).first()
-        if instance:
-            return instance
-        else:
+            filters = kwargs
+        
+        return session.query(cls).filter_by(**filters)
+    
+    @classmethod
+    def get_or_create(cls, session, fkey=[], **kwargs):
+        """Get an existing record or create a new one."""
+        instance = cls.filter_by(session, fkey=fkey, **kwargs).all()
+        
+        if not instance:
             instance = cls(**kwargs)
             session.add(instance)
             session.flush()
-            return instance
+        return instance
 
     @classmethod
-    def update_or_create(cls, session, **kwargs):
+    def update_or_create(cls, session, fkey=[], **kwargs):
         """Update an existing record or create a new one."""
-        pass
-
-    @classmethod
-    def get_or_create_many(cls, session, fkey=[], items=[]):
-        """Get or create multiple records."""
-        instances = [cls.get_or_create(session, fkey, **item) for item in items]
-        return instances
-    
-    @classmethod
-    def update_or_create_many(cls, session, items):
-        """Update or create multiple records."""
-        pass
-
+        instance = cls.filter_by(session, fkey=fkey, **kwargs)
+            
+        if instance:
+            instance.update(kwargs)
+        else:
+            instance = cls(**kwargs)
+            session.add(instance)
+        
+        session.flush()
+        
 
 engine = create_engine(
     DATABASE_URL,

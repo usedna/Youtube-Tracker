@@ -34,18 +34,19 @@ async def get_playlists_by_channel_ids(
 
         # Persist playlists for this channel
         for item in result:
-            playlists = item.get("playlists") if isinstance(item, dict) else getattr(item, "playlists", None)
+            playlists = item.get("playlists")
             if not playlists:
                 continue
             
-            playlists = [p for p in unpack_playlists(playlists)]
-            channel_ids = set([p.get("channel_id") for p in playlists if p.get("channel_id")])
-            channel_ids = [{"channel_id": cid} for cid in channel_ids]
-            Channel.get_or_create_many(session, channel_ids)
+            checked_items = set()
+            for playlist in unpack_playlists(playlists):
+                
+                if playlist["channel_id"] not in checked_items:
+                    obj_item = {"channel_id": playlist["channel_id"]}
+                    Channel.get_or_create(session, **obj_item)
+                    checked_items.add(playlist["channel_id"])
 
-            obj = [Playlist(**playlist) for playlist in playlists]
-            session.bulk_save_objects(obj)
-
+                Playlist.update_or_create(session, fkey=["playlist_id"], **playlist)
         try:
             session.commit()
             logger.info(f"Successfully committed {len(obj)} playlists to DB")
@@ -82,18 +83,20 @@ async def get_playlists_by_ids(
 
         # Persist playlists to DB (upsert)
         for item in result:
-            playlists = item.get("playlists") if isinstance(item, dict) else getattr(item, "playlists", None)
+            playlists = item.get("playlists")
             if not playlists:
                 continue
-            
-            playlists = [p for p in unpack_playlists(playlists)]
-            channel_ids = set([p.get("channel_id") for p in playlists if p.get("channel_id")])
-            channel_ids = [{"channel_id": cid} for cid in channel_ids]
-            Channel.get_or_create_many(session, channel_ids)
-            
-            obj = [Playlist(**playlist) for playlist in playlists]
-            session.bulk_save_objects(obj)
-            
+                        
+            checked_items = set()
+            for playlist in unpack_playlist_items(playlists):
+                
+                if playlist["channel_id"] not in checked_items:
+                    obj_item = {"channel_id": playlist["channel_id"]}
+                    Channel.get_or_create(session, **obj_item)
+                    checked_items.add(playlist["channel_id"])
+                
+                Playlist.update_or_create(session, fkey=["playlist_id"], **playlist)
+
         try:
             session.commit()
             logger.info(f"Successfully committed {len(obj)} playlists to DB")
@@ -130,40 +133,41 @@ async def get_playlist_items_by_playlist_ids(
             properties=request.properties,
             max_results=request.max_results,
             fetch_all=request.fetch_all
-        )
+            )
 
         for item in result:
-            playlist_items = item.get("items") if isinstance(item, dict) else getattr(item, "items", None)
+            playlist_items = item.get("items")
             if not playlist_items:
                 continue
             
             checked_items = set()
-            playlist_items = [pi for pi in unpack_playlist_items(playlist_items)]
-            for pi in playlist_items:
-                channel_id = pi.get("video").get("channel_id")
-                playlist_id = pi.get("item").get("playlist_id")
-                video_id = pi.get("video").get("video_id")
+            for pi in unpack_playlist_items(playlist_items):
+                pl_vid = {"playlist_id": pi["item"]["playlist_id"], 
+                          "video_id": pi["video"]["video_id"],
+                          "position": pi["item"]["position"],
+                          "published_at": pi["item"]["published_at"]}
+
+                channel_id = pi["video"]["channel_id"]
                 
-                if checked_items.issuperset({channel_id, playlist_id, video_id}):
+                if checked_items.issuperset({channel_id, pl_vid["playlist_id"], pl_vid["video_id"]}):
+                    PlaylistsVideos.update_or_create(session, fkey=["playlist_id", "video_id"], **pl_vid)
                     continue
                 
-                checked_items.add(channel_id)
-                checked_items.add(playlist_id)
-                checked_items.add(video_id)
+                if channel_id not in checked_items:
+                    obj_item = {"channel_id": channel_id}
+                    Channel.get_or_create(session, **obj_item)
+                    checked_items.add(channel_id)
                 
-                obj_item = {"channel_id": channel_id}
-                Channel.get_or_create(session, **obj_item)
+                if pl_vid["playlist_id"] not in checked_items:
+                    obj_item.update({"playlist_id": pl_vid["playlist_id"]})
+                    Playlist.get_or_create(session, **obj_item)
+                    checked_items.add(pl_vid["playlist_id"])
+                    
+                if pl_vid["video_id"] not in checked_items:
+                    Video.get_or_create(session, fkey=["video_id"], **pi.get("video"))
+                    checked_items.add(pl_vid["video_id"])
                 
-                obj_item.update({"playlist_id": playlist_id})
-                Playlist.get_or_create(session, **obj_item)
-                
-                Video.get_or_create(session, fkey=["video_id"], **pi.get("video"))
-
-                pl_vid = {"playlist_id": playlist_id, 
-                          "video_id": pi.get("video").get("video_id"),
-                          "position": pi.get("item").get("position"),
-                          "published_at": pi.get("item").get("published_at")}
-                PlaylistsVideos.get_or_create(session, **pl_vid)
+                PlaylistsVideos.update_or_create(session, fkey=["playlist_id", "video_id"], **pl_vid)
 
         try:
             session.commit()
