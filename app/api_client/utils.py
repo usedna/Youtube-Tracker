@@ -6,9 +6,9 @@ import json
 import logging
 
 def get_logger(name: str,
-                 file_name: str = "api.log",
-                 file_mode: str = "+w",
-                 level: int = logging.DEBUG) -> logging.Logger:
+               file_name: str = "api.log",
+               file_mode: str = "+w",
+               level: int = logging.DEBUG) -> logging.Logger:
     root_logger = logging.getLogger(name)
     
     if not root_logger.hasHandlers():

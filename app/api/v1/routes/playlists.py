@@ -1,13 +1,15 @@
 """
 Playlists API routes
 """
-from datetime import datetime, date
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from api.v1.models.request import PlaylistRequestByChannel, PlaylistRequestById,PlaylistItemRequestByPlaylist, BatchResponse, APIResponse
-from api.v1.database import DBSessionDep, get_session
-from api.v1.models.media_db import Channel, Playlist, PlaylistsVideos, Video
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_
+from api.v1.models.pydantic.request import PlaylistRequestByChannel, PlaylistRequestById, PlaylistItemRequestByPlaylist, BatchResponse, APIResponse
+from api.v1.database import DBSessionDep
+from api.v1.models.db.media_db import Channel, Playlist, PlaylistsVideos, Video
+from api.v1.models.pydantic.filters import PlaylistFilter
 from api.v1.utils import service, unpack_playlists, unpack_playlist_items
 
 
@@ -32,7 +34,7 @@ async def get_playlists_by_channel_ids(
             fetch_all=request.fetch_all
         )
 
-        # Persist playlists for this channel
+        count = 0
         for item in result:
             playlists = item.get("playlists")
             if not playlists:
@@ -47,20 +49,17 @@ async def get_playlists_by_channel_ids(
                     checked_items.add(playlist["channel_id"])
 
                 Playlist.update_or_create(session, fkey=["playlist_id"], **playlist)
+                count += 1
         try:
             session.commit()
-            logger.info(f"Successfully committed {len(obj)} playlists to DB")
+            logger.info(f"Successfully committed {count} playlists to DB")
         except Exception:
             session.rollback()
             logger.exception("Failed committing playlists to DB")
 
-        return BatchResponse(
-            api_response=APIResponse(
-                success=True,
-                data=result
-            ),
-            count=len(obj)
-        )
+        return BatchResponse(api_response=APIResponse(success=True,
+                                                      data=result),
+                             count=count)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch playlists: {str(e)}")
     
@@ -81,37 +80,32 @@ async def get_playlists_by_ids(
             max_results=request.max_results,
         )
 
-        # Persist playlists to DB (upsert)
+        count = 0
         for item in result:
             playlists = item.get("playlists")
             if not playlists:
                 continue
                         
             checked_items = set()
-            for playlist in unpack_playlist_items(playlists):
-                
+            for playlist in unpack_playlists(playlists):
                 if playlist["channel_id"] not in checked_items:
                     obj_item = {"channel_id": playlist["channel_id"]}
                     Channel.get_or_create(session, **obj_item)
                     checked_items.add(playlist["channel_id"])
-                
+            
                 Playlist.update_or_create(session, fkey=["playlist_id"], **playlist)
+                count += 1
 
         try:
             session.commit()
-            logger.info(f"Successfully committed {len(obj)} playlists to DB")
+            logger.info(f"Successfully committed {count} playlists to DB")
         except Exception:
             session.rollback()
             logger.exception("Failed committing playlists to DB")
             
-        return BatchResponse(
-            api_response=APIResponse(
-                success=True,
-                data=result
-            ),
-            
-            count=len(obj)
-        )
+        return BatchResponse(api_response=APIResponse(success=True,
+                                                      data=result),
+                             count=count)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch playlists: {str(e)}")
             
@@ -135,6 +129,7 @@ async def get_playlist_items_by_playlist_ids(
             fetch_all=request.fetch_all
             )
 
+        count = 0
         for item in result:
             playlist_items = item.get("items")
             if not playlist_items:
@@ -168,19 +163,16 @@ async def get_playlist_items_by_playlist_ids(
                     checked_items.add(pl_vid["video_id"])
                 
                 PlaylistsVideos.update_or_create(session, fkey=["playlist_id", "video_id"], **pl_vid)
+                count += 1
 
         try:
             session.commit()
         except Exception:
             session.rollback()
 
-        return BatchResponse(
-            api_response=APIResponse(
-                success=True,
-                data=result
-            ),
-            count=len(result) if isinstance(result, list) else 1
-        )
+        return BatchResponse(api_response=APIResponse(success=True,
+                                                      data=result),
+                             count=count)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch playlist items: {str(e)}")
 
@@ -188,35 +180,49 @@ async def get_playlist_items_by_playlist_ids(
 @router.get("/info")
 async def get_playlists_info(
     session: DBSessionDep,
-    limit: int = 100
+    filters: Annotated[PlaylistFilter, Query()],
     ):
     
     """Return playlists stored in the database (up to 100 rows)."""
-    rows = session.query(Playlist).limit(limit).all()
-    result = [{
-            "playlist_id": r.playlist_id,
-            "channel_id": r.channel_id,
-            "playlist_title": r.playlist_title,
-            "description": r.description,
-            "videos_count": r.videos_count,
-            "created_at": r.created_at.isoformat() if r.created_at else None,
-        } for r in rows]
+    
+    try:
+        rows = session.query(Playlist.__table__) \
+                      .filter(and_(
+                          Playlist.playlist_id.ilike(f"%{filters.playlist_id}%"),
+                          Playlist.channel_id.ilike(f"%{filters.channel_id}%"),
+                          Playlist.playlist_title.ilike(f"%{filters.playlist_title}%"),
+                          Playlist.videos_count >= filters.min_number_of_videos,
+                          Playlist.videos_count <= filters.max_number_of_videos,
+                          Playlist.status.ilike(f"%{filters.status}%"),
+                          Playlist.created_at > filters.date_range.start_date,
+                          Playlist.created_at < filters.date_range.end_date
+                          )).limit(filters.limit).all()
 
-    return {"count": len(result), "playlists": result}
+        result = [r._mapping for r in rows]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch playlists: {str(e)}")
 
-@router.get("/items/info")
+    return BatchResponse(
+        api_response=APIResponse(success=True,
+                                 data=result),
+        count=len(result))
+
+@router.get("/items/info", response_model=BatchResponse)
 async def get_playlist_items_info(
     session: DBSessionDep,
+    playlist_id: str = "",
+    video_id: str = "",
     limit: int = 100
     ):
     
     """Return playlist items stored in the database (up to 100 rows)."""
-    rows = session.query(PlaylistsVideos).limit(limit).all()
-    result = [{
-            "playlist_id": r.playlist_id,
-            "video_id": r.video_id,
-            "position": r.position,
-            "published_at": r.published_at.isoformat() if r.published_at else None,
-            } for r in rows]
+    rows = session.query(PlaylistsVideos.__table__) \
+                  .filter(and_(PlaylistsVideos.playlist_id.like(f"%{playlist_id}%"),
+                               PlaylistsVideos.video_id.like(f"%{video_id}%"))) \
+                  .limit(limit).all()
+    result = [r._mapping for r in rows]
 
-    return {"count": len(result), "playlist_items": result}
+    return BatchResponse(
+        api_response=APIResponse(success=True,
+                                 data=result),
+        count=len(result))

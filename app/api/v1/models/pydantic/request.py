@@ -1,9 +1,8 @@
 """
 Pydantic models for API requests and responses
 """
-from dataclasses import field
 
-from pydantic import BaseModel, Field, field_validator, validator
+from pydantic import BaseModel, Field, field_validator
 
 
 class BaseRequest(BaseModel):
@@ -70,5 +69,13 @@ class APIResponse(BaseModel):
 
 class BatchResponse(BaseModel):
     """Response model for batch operations."""
-    api_response: APIResponse = Field(..., description="API response details")
     count: int | None = Field(None, description="Number of items returned")
+    api_response: APIResponse = Field(..., description="API response details")
+    
+class WatchTimeResponse(BaseModel):
+    """Response model for video info operations."""
+    total_watch_time: str | None = Field("00:00:00", description="Total watch time of the videos")
+
+class VideoResponse(BatchResponse, WatchTimeResponse):
+    """Response model for video info operations."""
+    pass

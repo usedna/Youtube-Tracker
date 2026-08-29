@@ -2,13 +2,16 @@
 Videos API routes
 """
 
-from datetime import timedelta
 import logging
+from datetime import timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
-from api.v1.models.request import VideoRequestById, BatchResponse, APIResponse
-from api.v1.database import DBSessionDep, get_session
-from app.api.v1.models.media_db import Channel, Video
+from fastapi import APIRouter, HTTPException, Query
+from sqlalchemy import and_
+from api.v1.models.pydantic.request import VideoRequestById, BatchResponse, APIResponse, VideoResponse
+from api.v1.database import DBSessionDep
+from api.v1.models.db.media_db import Channel, Video, PlaylistsVideos, Playlist
+from api.v1.models.pydantic.filters import VideoFilter
 from api.v1.utils import service, unpack_video_details
 
 
@@ -51,13 +54,9 @@ async def get_videos_by_ids(
         except Exception:
             session.rollback()
 
-        return BatchResponse(
-            api_response=APIResponse(
-                success=True,
-                data=result
-            ),
-            count=len(result) if isinstance(result, list) else 1
-        )
+        return BatchResponse(api_response=APIResponse(success=True,
+                                                      data=result),
+                             count=len(result))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch videos: {str(e)}")
 
@@ -92,32 +91,49 @@ async def auto_update_videos(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to auto-update videos: {str(e)}")
 
-@router.get("/info")
+@router.get("/info", response_model=VideoResponse)
 async def get_videos_info(
     session: DBSessionDep,
-    limit: int = 100
+    filters: Annotated[VideoFilter, Query()],
     ):
     
     """Return videos stored in the database (up to 100 rows)."""
-    rows = session.query(Video).limit(limit).all()
-    result = []
-    total_time = timedelta(0)
-    for r in rows:
-        total_time += r.duration
-        result.append({
-            "video_id": r.video_id,
-            "channel_id": r.channel_id,
-            "etag": r.etag,
-            "video_title": r.video_title,
-            "duration": r.duration,
-            "video_description": r.video_description,
-            "language": r.language,
-            "tags": r.tags,
-            "dimension": r.dimension,
-            "definition": r.definition,
-            "paid": r.paid,
-            "captions": r.captions,
-            "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else None,
-        })
+    try:
+        
+        if filters.playlist_id or filters.playlist_title:
+            table = session.query(Video.__table__) \
+                           .join(PlaylistsVideos) \
+                           .join(Playlist.__table__) \
+                           .where(Playlist.playlist_title.ilike(f"%{filters.playlist_title}%"))
 
-    return {"count": len(result), "total_watch_time": str(total_time), "videos": result}
+        elif filters.channel_id or filters.channel_name:
+            table = session.query(Video.__table__) \
+                           .join(Channel.__table__) \
+                           .where(Channel.channel_name.ilike(f"%{filters.channel_name}%"))
+
+        else:
+            table = session.query(Video.__table__)
+            
+        rows = table.filter(and_(Video.video_id.ilike(f"%{filters.video_ids}%"),
+                      Video.channel_id.ilike(f"%{filters.channel_id}%"),
+                      Video.video_title.ilike(f"%{filters.video_title}%"),
+                      Video.duration >= filters.min_duration,
+                      Video.duration <= filters.max_duration,
+                      Video.language.ilike(f"%{filters.language}%"),
+                      Video.uploaded_at > filters.date_range.start_date,
+                      Video.uploaded_at < filters.date_range.end_date
+                  )).limit(filters.limit).all()
+        result = []
+        total_time = timedelta(0)
+        for r in rows:
+            r = r._mapping
+            total_time += r["duration"]
+            result.append(r)
+
+        return VideoResponse(total_watch_time=str(total_time),
+                             count=len(result),
+                             api_response=APIResponse(success=True,
+                                                      data=result),
+                            )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch videos: {str(e)}")

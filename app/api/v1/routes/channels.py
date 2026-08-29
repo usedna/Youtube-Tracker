@@ -2,12 +2,15 @@
 Channels API routes
 """
 import logging
+from typing import Annotated
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from api.v1.database import DBSessionDep
-from api.v1.models.request import ChannelRequestById, ChannelRequestByHandle, BatchResponse, APIResponse
-from api.v1.models.media_db import Channel
+from api.v1.models.pydantic.request import ChannelRequestById, ChannelRequestByHandle, BatchResponse, APIResponse
+from api.v1.models.db.media_db import Channel
+from api.v1.models.pydantic.filters import ChannelFilter
 from api.v1.utils import service, unpack_channel_details
+from sqlalchemy import and_
 
 
 logger = logging.getLogger(__name__)
@@ -49,8 +52,7 @@ async def get_channels_by_ids(
                 success=True,
                 data=result
                 ),
-            count=len(result) if isinstance(result, list) else 1
-            )
+            count=len(result))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch channels: {str(e)}")
 
@@ -88,8 +90,7 @@ async def get_channels_by_handles(
                          success=True,
                          data=result
                          ),
-            count=len(result) if isinstance(result, list) else 1
-            )
+            count=len(result))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch channels: {str(e)}")
 
@@ -97,13 +98,27 @@ async def get_channels_by_handles(
 @router.get("/info")
 async def get_channels_info(
     session: DBSessionDep,
-    limit: int = 100
+    filters: Annotated[ChannelFilter, Query()],
     ):
     
     """Return channels stored in the database (up to 100 rows)."""
-    rows = session.query(Channel).limit(limit).all()
-    result = []
-    for r in rows:
-        result.append(r)
+    
+    try:
+        rows = session.query(Channel.__table__) \
+                      .filter(and_(Channel.channel_id.ilike(f"%{filters.channel_id}%"),
+                                   Channel.channel_handle.ilike(f"%{filters.channel_handle}%"),
+                                   Channel.channel_name.ilike(f"%{filters.channel_name}%"),
+                                   Channel.country.ilike(f"%{filters.country}%"),
+                                   Channel.created_at > filters.date_range.start_date,
+                                   Channel.created_at < filters.date_range.end_date
+                                   )
+                              ) \
+                      .limit(filters.limit).all()
+                      
+        result = [r._mapping for r in rows]
 
-    return {"count": len(result), "channels": result}
+        return BatchResponse(api_response=APIResponse(success=True,
+                                                      data=result),
+                             count=len(result))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch channels: {str(e)}")
