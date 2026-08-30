@@ -199,13 +199,13 @@ async def get_playlists_info(
                           )).limit(filters.limit).all()
 
         result = [r._mapping for r in rows]
+        
+        return BatchResponse(
+                api_response=APIResponse(success=True,
+                                         data=result),
+                count=len(result))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to fetch playlists: {str(e)}")
-
-    return BatchResponse(
-        api_response=APIResponse(success=True,
-                                 data=result),
-        count=len(result))
 
 @router.get("/items/info", response_model=BatchResponse)
 async def get_playlist_items_info(
